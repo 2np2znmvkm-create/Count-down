@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Work-countdown</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        :root {
+            --muji-bg: #F5F5F0;
+            --muji-brown: #7F7664;
+            --muji-accent: #A69080;
+            --stress-green: #A8D5BA;
+            --stress-yellow: #F3E5AB;
+            --stress-red: #E6B2B2;
+        }
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--muji-bg);
+            color: var(--muji-brown);
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .dashboard-card { background: white; border-radius: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .big-text { font-size: 2.8rem; font-weight: 800; letter-spacing: -1px; }
+        .progress-bar { height: 12px; background: #E5E5E0; border-radius: 10px; overflow: hidden; }
+        .progress-fill { height: 100%; background: var(--muji-accent); transition: width 1s linear; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .calendar-day { aspect-ratio: 1/1; position: relative; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.8rem; }
+        .shift-btn { border: 1.5px solid var(--muji-accent); transition: 0.2s; }
+        .shift-btn.active { background: var(--muji-accent); color: white; }
+        .edit-mode .calendar-day { border: 1px dashed var(--muji-accent); }
+    </style>
+</head>
+<body class="p-4 pb-20">
+
+    <!-- 【頂部】Dashboard -->
+    <div class="dashboard-card p-6 mb-4 text-center">
+        <div id="current-date" class="text-gray-500 font-bold mb-4">2026年06月22日 (一)</div>
+        
+        <!-- 班次切換 -->
+        <div class="flex justify-between gap-2 mb-6">
+            <button onclick="changeShift('A')" id="btn-A" class="shift-btn flex-1 py-2 rounded-full text-sm">A更</button>
+            <button onclick="changeShift('P')" id="btn-P" class="shift-btn flex-1 py-2 rounded-full text-sm">P更</button>
+            <button onclick="changeShift('AN')" id="btn-AN" class="shift-btn flex-1 py-2 rounded-full text-sm">AN更</button>
+            <button onclick="changeShift('O')" id="btn-O" class="shift-btn flex-1 py-2 rounded-full text-sm">O休息</button>
+        </div>
+
+        <!-- 跳錢 -->
+        <div id="salary-display" class="big-text text-black mb-2 leading-none">$0.00</div>
+        <div id="salary-display-2" class="text-sm text-gray-400 mb-4 hidden">N段同步跳動中...</div>
+
+        <!-- 倒數與進度條 -->
+        <div id="timer-container" class="space-y-4">
+            <div id="timer-1">
+                <div class="flex justify-between text-xs mb-1">
+                    <span id="countdown-label-1">剩餘時間</span>
+                    <span id="countdown-time-1">00:00:00</span>
+                </div>
+                <div class="progress-bar"><div id="bar-1" class="progress-fill" style="width: 0%"></div></div>
+            </div>
+            <div id="timer-2" class="hidden">
+                <div class="flex justify-between text-xs mb-1">
+                    <span id="countdown-label-2">N更倒數</span>
+                    <span id="countdown-time-2">等待中</span>
+                </div>
+                <div class="progress-bar"><div id="bar-2" class="progress-fill" style="width: 0%"></div></div>
+            </div>
+        </div>
+
+        <div id="holiday-countdown" class="mt-4 text-xs text-gray-400 border-t pt-2">
+            仲有 (...) 日就放假啦！
+        </div>
+    </div>
+
+    <!-- 【中部】Task 紀錄 -->
+    <div class="dashboard-card p-6 mb-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold">今日辛苦度: <span id="stress-score">0</span></h3>
+            <button onclick="toggleEditTasks()" class="text-xs bg-gray-100 px-3 py-1 rounded-full">Edit Tasks</button>
+        </div>
+        
+        <div id="task-list" class="flex flex-wrap gap-2 mb-4">
+            <!-- Tasks dynamically injected here -->
+        </div>
+
+        <div id="stress-bar" class="w-full h-2 rounded-full bg-gray-100 mb-4">
+            <div id="stress-fill" class="h-full rounded-full transition-all" style="width: 0%; background: var(--stress-green);"></div>
+        </div>
+
+        <button onclick="saveTodayData()" class="w-full bg-stone-700 text-white py-3 rounded-xl font-bold active:scale-95 transition">儲存今日紀錄</button>
+    </div>
+
+    <!-- 【底部】月曆 -->
+    <div class="dashboard-card p-4">
+        <div class="flex justify-between items-center mb-4">
+            <button onclick="changeMonth(-1)" class="p-2">＜</button>
+            <h3 id="calendar-month" class="font-bold text-lg">2026年6月</h3>
+            <button onclick="changeMonth(1)" class="p-2">＞</button>
+        </div>
+        
+        <div class="grid grid-cols-7 text-center text-xs font-bold text-gray-400 mb-2">
+            <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+        </div>
+        <div id="calendar-grid" class="calendar-grid">
+            <!-- Days injected here -->
+        </div>
+
+        <div class="mt-4 flex justify-end">
+            <button id="roster-edit-mode" onclick="toggleRosterEditMode()" class="text-xs border border-stone-400 px-4 py-2 rounded-full">批量刷排班 (Off)</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 設定與初始化 ---
+        const HOURLY_RATE = 205;
+        const PER_SEC = HOURLY_RATE / 3600;
+        const SHIFTS = {
+            'A': { start: '07:00', end: '15:48' },
+            'P': { start: '13:00', end: '21:48' },
+            'A-': { start: '07:00', end: '14:48' },
+            'N': { start: '21:30', end: '07:18', crossDay: true },
+            'O': null
+        };
+
+        let db = JSON.parse(localStorage.getItem('work-countdown-db')) || { roster: {}, dailyScores: {}, tasks: [
+            {id:1, name: '看一', score: 1}, {id:2, name: '看二', score: 2}, {id:3, name: '急救', score: 5}
+        ]};
+        
+        let viewDate = new Date();
+        let rosterEditMode = false;
+
+        function saveDB() { localStorage.setItem('work-countdown-db', JSON.stringify(db)); }
+
+        // --- 核心時間邏輯 ---
+        function updateDashboard() {
+            const now = new Date();
+            const todayStr = formatDate(now);
+            document.getElementById('current-date').innerText = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 (${['日','一','二','三','四','五','六'][now.getDay()]})`;
+            
+            const currentShift = db.roster[todayStr] || 'O';
+            updateShiftUI(currentShift);
+
+            if (currentShift === 'O') {
+                showRestDay();
+            } else if (currentShift === 'AN') {
+                handleANShift(now);
+            } else {
+                handleNormalShift(now, currentShift);
+            }
+            updateHolidayCountdown(now);
+        }
+
+        function handleNormalShift(now, shiftKey) {
+            const shift = SHIFTS[shiftKey];
+            const startTime = timeToDate(now, shift.start);
+            const endTime = timeToDate(now, shift.end);
+            
+            document.getElementById('timer-2').classList.add('hidden');
+            processTimer(now, startTime, endTime, 1);
+        }
+
+        function handleANShift(now) {
+            document.getElementById('timer-2').classList.remove('hidden');
+            const shiftA = SHIFTS['A-'];
+            const shiftN = SHIFTS['N'];
+            
+            const startA = timeToDate(now, shiftA.start);
+            const endA = timeToDate(now, shiftA.end);
+            const startN = timeToDate(now, shiftN.start);
+            const endN = new Date(startN.getTime() + (9 * 60 + 48) * 60000); // 跨日計算
+
+            processTimer(now, startA, endA, 1, "A-段");
+            processTimer(now, startN, endN, 2, "N段");
+        }
+
+        function processTimer(now, start, end, index, labelPrefix = "剩餘時間") {
+            const label = document.getElementById(`countdown-label-${index}`);
+            const timeText = document.getElementById(`countdown-time-${index}`);
+            const bar = document.getElementById(`bar-${index}`);
+            const salaryText = index === 1 ? document.getElementById('salary-display') : {innerText: ''};
+
+            if (now < start) {
+                label.innerText = `${labelPrefix} (尚未開始)`;
+                timeText.innerText = formatDuration(end - start);
+                bar.style.width = '0%';
+                if(index === 1) salaryText.innerText = '$0.00';
+            } else if (now >= start && now <= end) {
+                label.innerText = `${labelPrefix} (工作中)`;
+                const remain = end - now;
+                timeText.innerText = formatDuration(remain);
+                const pct = ((now - start) / (end - start)) * 100;
+                bar.style.width = `${pct}%`;
+                if(index === 1) salaryText.innerText = `$${(((now - start)/1000) * PER_SEC).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            } else {
+                label.innerText = `${labelPrefix} (已放工)`;
+                timeText.innerText = '00:00:00';
+                bar.style.width = '100%';
+                if(index === 1) salaryText.innerText = `$${(((end - start)/1000) * PER_SEC).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+        }
+
+        // --- 月曆邏輯 ---
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            grid.innerHTML = '';
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth();
+            document.getElementById('calendar-month').innerText = `${year}年${month + 1}月`;
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = formatDate(new Date(year, month, d));
+                const dayEl = document.createElement('div');
+                dayEl.className = 'calendar-day cursor-pointer';
+                
+                const shift = db.roster[dateStr] || 'O';
+                const score = db.dailyScores[dateStr];
+
+                // 辛苦度顏色
+                if (score) {
+                    dayEl.style.backgroundColor = score >= 11 ? 'var(--stress-red)' : (score >= 6 ? 'var(--stress-yellow)' : 'var(--stress-green)');
+                }
+
+                dayEl.innerHTML = `<span class="text-[10px] opacity-50">${d}</span><span class="font-bold">${shift}</span>`;
+                dayEl.onclick = () => onDayClick(dateStr);
+                grid.appendChild(dayEl);
+            }
+        }
+
+        function onDayClick(dateStr) {
+            if (rosterEditMode) {
+                const shifts = ['A', 'P', 'AN', 'O'];
+                let current = db.roster[dateStr] || 'O';
+                let next = shifts[(shifts.indexOf(current) + 1) % shifts.length];
+                applyShiftLogic(dateStr, next);
+                renderCalendar();
+                updateDashboard();
+            } else {
+                const score = db.dailyScores[dateStr] || 0;
+                alert(`日期: ${dateStr}\n班次: ${db.roster[dateStr] || 'O'}\n辛苦得分: ${score}`);
+            }
+        }
+
+        function applyShiftLogic(dateStr, shift) {
+            db.roster[dateStr] = shift;
+            if (shift === 'AN') {
+                const tomorrow = new Date(dateStr);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                db.roster[formatDate(tomorrow)] = 'N';
+                db.roster[dateStr] = 'A-'; // 儲存為 A- 以便邏輯判定，但UI顯示可為AN
+                // 特別標記這是一個AN組合
+                db.roster[dateStr] = 'AN';
+            }
+            saveDB();
+        }
+
+        function changeShift(type) {
+            const todayStr = formatDate(new Date());
+            applyShiftLogic(todayStr, type);
+            renderCalendar();
+            updateDashboard();
+        }
+
+        // --- 功能小工具 ---
+        function formatDate(d) { return d.toISOString().split('T')[0]; }
+        function timeToDate(base, timeStr) {
+            const [h, m] = timeStr.split(':');
+            const d = new Date(base);
+            d.setHours(h, m, 0, 0);
+            return d;
+        }
+        function formatDuration(ms) {
+            const s = Math.floor(ms / 1000);
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+        function updateShiftUI(activeShift) {
+            ['A', 'P', 'AN', 'O'].forEach(s => {
+                document.getElementById(`btn-${s}`).className = `shift-btn flex-1 py-2 rounded-full text-sm ${activeShift === s ? 'active' : ''}`;
+            });
+        }
+        function showRestDay() {
+            document.getElementById('salary-display').innerText = '$0.00';
+            document.getElementById('timer-container').innerHTML = `<div class="py-4 font-bold text-xl text-stone-400">今天是休息日，好好休息！</div>`;
+        }
+        function updateHolidayCountdown(now) {
+            let count = 0;
+            let checkDate = new Date(now);
+            let found = false;
+            for(let i=1; i<60; i++) {
+                checkDate.setDate(checkDate.getDate() + 1);
+                if (db.roster[formatDate(checkDate)] === 'O') {
+                    count = i;
+                    found = true;
+                    break;
+                }
+            }
+            document.getElementById('holiday-countdown').innerText = found ? `仲有 ${count} 日就放假啦！` : '未有排班紀錄';
+        }
+
+        function toggleRosterEditMode() {
+            rosterEditMode = !rosterEditMode;
+            document.getElementById('roster-edit-mode').innerText = `批量刷排班 (${rosterEditMode ? 'ON' : 'OFF'})`;
+            document.getElementById('calendar-grid').className = rosterEditMode ? 'calendar-grid edit-mode' : 'calendar-grid';
+        }
+
+        function changeMonth(dir) {
+            viewDate.setMonth(viewDate.getMonth() + dir);
+            renderCalendar();
+        }
+
+        // --- Task 系統 ---
+        let currentStress = 0;
+        function renderTasks() {
+            const container = document.getElementById('task-list');
+            container.innerHTML = db.tasks.map(t => `
+                <button onclick="toggleTask(${t.score}, this)" class="task-pill border border-stone-300 px-4 py-2 rounded-full text-sm active:bg-stone-200">
+                    ${t.name} +${t.score}
+                </button>
+            `).join('');
+        }
+
+        function toggleTask(score, btn) {
+            btn.classList.toggle('bg-stone-800');
+            btn.classList.toggle('text-white');
+            const isActive = btn.classList.contains('bg-stone-800');
+            currentStress += isActive ? score : -score;
+            document.getElementById('stress-score').innerText = currentStress;
+            const fill = document.getElementById('stress-fill');
+            fill.style.width = `${Math.min(currentStress * 5, 100)}%`;
+            fill.style.background = currentStress >= 11 ? 'var(--stress-red)' : (currentStress >= 6 ? 'var(--stress-yellow)' : 'var(--stress-green)');
+        }
+
+        function saveTodayData() {
+            const todayStr = formatDate(new Date());
+            db.dailyScores[todayStr] = currentStress;
+            saveDB();
+            renderCalendar();
+            alert('紀錄已儲存！');
+        }
+
+        // 啟動
+        setInterval(updateDashboard, 1000);
+        renderCalendar();
+        renderTasks();
+        updateDashboard();
+
+    </script>
+</body>
+</html>

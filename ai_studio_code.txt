@@ -1,0 +1,15 @@
+{
+  "name": "Work-countdown",
+  "short_name": "Work",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#F5F5F0",
+  "theme_color": "#7F7664",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2382/2382661.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
